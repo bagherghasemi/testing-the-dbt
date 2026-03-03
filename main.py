@@ -1299,53 +1299,65 @@ def main() -> None:
     # Enrich customers.last_order_at from all orders (after daily loop, before BQ write)
     customers_df = _enrich_customers_last_order_at(customers_df)
 
+    # --- Static entity Parquet export (always, regardless of BQ config) ---
+    _drop_cols_customers = [
+        "creative_fatigue_map", "cart_memory",
+        "shipping_bad_count", "shipping_good_count",
+        "discount_only_buyer", "days_since_last_interaction",
+        "spending_propensity", "_pool_entry_date",
+    ]
+    _drop_cols_creatives = [
+        "total_impressions", "days_active",
+        "lifecycle_stage", "performance_multiplier",
+        "innate_quality",
+    ]
+    customers_clean = customers_df.drop(columns=_drop_cols_customers, errors="ignore")
+    for col, default in [
+        ("recent_negative_velocity", 0.0),
+        ("discount_dependency", 0.0),
+        ("exposure_count", 0),
+        ("expressed_desire_level", 0.1),
+        ("desire_decay_memory", 0.0),
+    ]:
+        if col not in customers_clean.columns:
+            customers_clean[col] = default
+        else:
+            customers_clean[col] = customers_clean[col].fillna(default)
+    if "exposure_count" in customers_clean.columns:
+        customers_clean["exposure_count"] = customers_clean["exposure_count"].astype("int64")
+    creatives_clean = creatives_df.drop(columns=_drop_cols_creatives, errors="ignore")
+
+    static_dir = OUTPUT_ROOT / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    static_exports = {
+        "shopify_customers": customers_clean,
+        "shopify_products": products_df,
+        "shopify_product_variants": variants_df,
+        "meta_creatives": creatives_clean,
+        "meta_ad_accounts": ad_accounts_df,
+        "meta_campaigns": campaigns_df,
+        "meta_ad_sets": adsets_df,
+        "meta_ads": ads_df,
+    }
+    for name, df in static_exports.items():
+        path = static_dir / f"{name}.parquet"
+        df.to_parquet(path, index=False)
+        print(f"  [STATIC] {name}: {len(df)} rows -> {path}")
+
     project_id = config.get("project_id")
     dataset_meta = config.get("dataset_meta")
     dataset_shopify = config.get("dataset_shopify")
     if project_id and dataset_meta and dataset_shopify:
         bq_client = bigquery.Client(project=project_id)
-        # Visibility layer: expose behavioral memory; drop non-serializable columns only
-        customers_for_bq = customers_df.drop(
-            columns=[
-                "creative_fatigue_map", "cart_memory",
-                "shipping_bad_count", "shipping_good_count",
-                "discount_only_buyer", "days_since_last_interaction",
-                "spending_propensity", "_pool_entry_date",
-            ],
-            errors="ignore",
-        )
-        # Safety defaults for visibility columns (old configs / partial flows)
-        for col, default in [
-            ("recent_negative_velocity", 0.0),
-            ("discount_dependency", 0.0),
-            ("exposure_count", 0),
-            ("expressed_desire_level", 0.1),
-            ("desire_decay_memory", 0.0),
-        ]:
-            if col not in customers_for_bq.columns:
-                customers_for_bq[col] = default
-            else:
-                customers_for_bq[col] = customers_for_bq[col].fillna(default)
-        if "exposure_count" in customers_for_bq.columns:
-            customers_for_bq["exposure_count"] = customers_for_bq["exposure_count"].astype("int64")
-        # Upgrade 9: drop internal creative lifecycle columns before BQ write
-        creatives_for_bq = creatives_df.drop(
-            columns=[
-                "total_impressions", "days_active",
-                "lifecycle_stage", "performance_multiplier",
-                "innate_quality",
-            ],
-            errors="ignore",
-        )
         load_static_entities(
             bq_client,
             project_id,
             dataset_meta,
             dataset_shopify,
-            customers_for_bq,
+            customers_clean,
             products_df,
             variants_df,
-            creatives_for_bq,
+            creatives_clean,
             ad_accounts_df,
             campaigns_df,
             adsets_df,

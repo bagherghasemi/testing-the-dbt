@@ -1,0 +1,53 @@
+name: Ground Truth Parallel Runs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      matrix:
+        scenario:
+          - gt_healthy_growth
+          - gt_discount_addiction
+          - gt_bad_acquisition
+          - gt_silent_churn
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run simulator (${{ matrix.scenario }})
+        run: |
+          echo "Running scenario: ${{ matrix.scenario }}"
+          python main.py configs/${{ matrix.scenario }}.yaml
+          echo ""
+          echo "=== Output files ==="
+          find output/ -name "*.parquet" | head -20
+          echo "..."
+          find output/ -name "*.parquet" | wc -l
+          echo "total parquet files"
+
+      - name: Package output
+        run: |
+          cd output
+          tar czf ../output_${{ matrix.scenario }}.tar.gz .
+          cd ..
+          ls -lh output_${{ matrix.scenario }}.tar.gz
+
+      - name: Upload Parquet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.scenario }}_output
+          path: output_${{ matrix.scenario }}.tar.gz
+          retention-days: 7
