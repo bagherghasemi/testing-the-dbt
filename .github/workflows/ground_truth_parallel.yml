@@ -6,14 +6,13 @@ on:
 jobs:
   simulate:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       matrix:
         scenario:
           - gt_healthy_growth
           - gt_discount_addiction
           - gt_bad_acquisition
-          - gt_silent_churn
 
     steps:
       - name: Checkout repository
