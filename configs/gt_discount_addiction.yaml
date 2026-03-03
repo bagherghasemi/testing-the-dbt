@@ -38,7 +38,7 @@ brand_lifecycle:
 
 population_dynamics:
   enabled: true
-  daily_inflow_base: 70
+  daily_inflow_base: 30
   inflow_decay_rate: 0.0006
   quality_drift_rate: 0.00015
   quality_drift_cap: 0.18
