@@ -34,17 +34,17 @@ brand_lifecycle:
   decline_repeat_decay_pct: 0.25
   decline_cpa_multiplier: 2.0
   phase_effects:
-    maturation: {ctr_mult: 0.95, cvr_mult: 1.05, refund_mult: 0.90, repeat_mult: 1.1, cpa_mult: 1.2}
-    saturation: {ctr_mult: 0.85, cvr_mult: 0.80, refund_mult: 1.0, repeat_mult: 0.8, cpa_mult: 1.5}
-    decline:    {ctr_mult: 0.75, cvr_mult: 0.65, refund_mult: 1.2, repeat_mult: 0.5, cpa_mult: 1.7}
+    maturation: {ctr_mult: 0.92, cvr_mult: 1.0, refund_mult: 0.95, repeat_mult: 0.85, cpa_mult: 1.3}
+    saturation: {ctr_mult: 0.80, cvr_mult: 0.70, refund_mult: 1.0, repeat_mult: 0.5, cpa_mult: 1.6}
+    decline:    {ctr_mult: 0.65, cvr_mult: 0.50, refund_mult: 1.3, repeat_mult: 0.3, cpa_mult: 2.0}
 
 population_dynamics:
   enabled: true
   daily_inflow_base: 40
   inflow_decay_rate: 0.0004
-  quality_drift_rate: 0.0002
-  quality_drift_cap: 0.15
-  pool_expiry_days: 365
+  quality_drift_rate: 0.0005
+  quality_drift_cap: 0.25
+  pool_expiry_days: 240
 
 diagnostic_output: true
 
@@ -76,8 +76,8 @@ distribution_realism:
   creative_quality_sigma: 0.4
 
 memory:
-  brand_memory_decay_after_days: 60
-  brand_memory_decay_rate: 0.010
+  brand_memory_decay_after_days: 45
+  brand_memory_decay_rate: 0.020
   bad_shipping_permanent_penalty: 0.15
   discount_only_fullprice_penalty: 0.4
 

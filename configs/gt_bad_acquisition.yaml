@@ -6,7 +6,7 @@ simulation:
   start_date: "2023-01-01"
   end_date: "2026-01-01"
 
-num_customers: 700
+num_customers: 500
 num_products: 22
 creatives: 40
 
@@ -39,10 +39,10 @@ brand_lifecycle:
 
 population_dynamics:
   enabled: true
-  daily_inflow_base: 80
+  daily_inflow_base: 50
   inflow_decay_rate: 0.0008
-  quality_drift_rate: 0.0002
-  quality_drift_cap: 0.20
+  quality_drift_rate: 0.0004
+  quality_drift_cap: 0.30
   pool_expiry_days: 270
 
 diagnostic_output: true
