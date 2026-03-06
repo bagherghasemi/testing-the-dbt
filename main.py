@@ -23,7 +23,8 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, _script_dir)
 
 import argparse
-from datetime import datetime, timedelta
+import calendar
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -685,6 +686,7 @@ SUBFOLDERS = (
     "refunds",
     "fulfillments",
     "shopify_checkouts",
+    "god_mode_customer_monthly",
 )
 
 
@@ -724,6 +726,39 @@ def _write_diagnostic_snapshot(
     df = pd.DataFrame([row])
     path = DIAG_OUTPUT_ROOT / "brand_state_daily" / f"{date_str}.parquet"
     df.to_parquet(path, index=False)
+
+
+def _write_god_mode_snapshot(
+    customers_df: pd.DataFrame, snapshot_date: date
+) -> None:
+    """End-of-month customer internal state snapshot for r² calibration.
+
+    Only includes customers who have ordered (last_order_date is not NaT).
+    Uses last_order_date (sim-internal live tracker, NOT last_order_at which
+    is the Shopify-schema column computed post-loop).
+    """
+    GOD_MODE_COLS = [
+        "customer_id", "trust_score", "disappointment_memory",
+        "satisfaction_memory", "recent_negative_velocity",
+        "discount_dependency", "expressed_desire_level", "exposure_count",
+        "discount_only_buyer", "days_since_last_interaction",
+        "price_sensitivity", "impulse_level", "loyalty_propensity",
+        "regret_propensity", "quality_expectation", "spending_propensity",
+    ]
+    # Filter: only customers who have placed at least one order
+    converted = customers_df[customers_df["last_order_date"].notna()]
+    if converted.empty:
+        return
+    available = [c for c in GOD_MODE_COLS if c in converted.columns]
+    if len(available) < len(GOD_MODE_COLS):
+        missing = set(GOD_MODE_COLS) - set(available)
+        print(f"  [GOD-MODE WARNING] Missing columns: {missing}")
+    snapshot = converted[available].copy()
+    # First-of-month date string for DATE compatibility with pipeline month_date
+    snapshot["snapshot_month"] = snapshot_date.strftime("%Y-%m-01")
+    path = OUTPUT_ROOT / "god_mode_customer_monthly" / f"{snapshot_date.strftime('%Y-%m')}.parquet"
+    snapshot.to_parquet(path, index=False)
+    print(f"  [GOD-MODE] {snapshot_date.strftime('%Y-%m')}: {len(snapshot)} customers -> {path}")
 
 
 def _set_cart_memory(df: pd.DataFrame, abandoned_carts_df: pd.DataFrame, date_str: str) -> None:
@@ -1229,6 +1264,11 @@ def main() -> None:
         # Diagnostic output: write daily brand state snapshot
         if diagnostic_output:
             _write_diagnostic_snapshot(date_str, brand_state, customers_df)
+
+        # God-mode: end-of-month customer state snapshot (always-on)
+        last_day = calendar.monthrange(current.year, current.month)[1]
+        if current.day == last_day:
+            _write_god_mode_snapshot(customers_df, current)
 
         print(
             f"{date_str}\t phase={brand_state.lifecycle_phase.value}\t exposures={n_exposures}\t clicks={n_clicks}\t "
