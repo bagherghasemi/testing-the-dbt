@@ -292,6 +292,12 @@ def update_customers_from_day_orders(
     else:
         price_sensitivity = None
 
+    if "quality_expectation" in customers_df.columns:
+        quality_exp = customers_df["quality_expectation"].values.copy()
+        qe_cal_rate = float(config.get("quality_expectation_calibration_rate", 0.01))
+    else:
+        quality_exp = None
+
     discount_drift_strength = float(config.get("discount_drift_strength", 0.01))
     refunded_order_ids = set(refunds_df["order_id"].astype(str)) if not refunds_df.empty else set()
     created_col = "created_at" if "created_at" in orders_df.columns else "order_timestamp"
@@ -335,6 +341,14 @@ def update_customers_from_day_orders(
                 price_sensitivity[idx] = np.clip(
                     price_sensitivity[idx] + float(discount_pct) * discount_drift_strength, 0.0, 1.0
                 )
+        else:
+            # Full-price purchase: reduce price sensitivity
+            if price_sensitivity is not None:
+                fp_rate = float(config.get("fullprice_desensitization_rate", 0.005))
+                if str(order.get("id", "")) not in refunded_order_ids:
+                    price_sensitivity[idx] = np.clip(
+                        price_sensitivity[idx] - fp_rate, 0.0, 1.0
+                    )
 
         # Tier 5: promise pressure amplifies disappointment (high-pressure creatives decay trust faster)
         promise_pressure = _promise_pressure_from_creative(creative_id, creatives_df)
@@ -370,6 +384,8 @@ def update_customers_from_day_orders(
             disappointment[idx] += effective_mismatch
             trust[idx] -= effective_mismatch * effective_alpha
             recent_neg_vel[idx] = velocity_decay * recent_neg_vel[idx] + (1.0 - velocity_decay) * min(mismatch, 1.0)
+            if quality_exp is not None:
+                quality_exp[idx] -= mismatch * qe_cal_rate
         else:
             satisfaction_bonus = abs(mismatch) * (1.0 + alignment)
             # Tier 9: angle trust stability — authority compounds satisfaction faster
@@ -404,6 +420,18 @@ def update_customers_from_day_orders(
     customers_df["recent_negative_velocity"] = recent_neg_vel
     if price_sensitivity is not None:
         customers_df["price_sensitivity"] = np.clip(price_sensitivity, 0.0, 1.0)
+
+    # Loyalty erosion: high disappointment erodes loyalty
+    if "loyalty_propensity" in customers_df.columns:
+        loy_erosion = float(config.get("loyalty_disappointment_erosion", 0.02))
+        loy = customers_df["loyalty_propensity"].values.copy()
+        dis_vals = customers_df["disappointment_memory"].values
+        loy -= dis_vals * loy_erosion
+        customers_df["loyalty_propensity"] = np.clip(loy, 0.0, 1.0)
+
+    if quality_exp is not None:
+        customers_df["quality_expectation"] = np.clip(quality_exp, 0.0, 1.0)
+
     return customers_df
 
 
@@ -614,29 +642,70 @@ def apply_brand_memory_decay(
     config: dict,
 ) -> pd.DataFrame:
     """
-    Upgrade 6: Inactive customers (days_since_last_interaction > threshold)
-    have trust drift toward 0.5 (brand forgotten). Applied once per day.
+    Daily memory decay in two phases:
+    Phase 1 (universal): satisfaction/disappointment memories fade for ALL customers.
+    Phase 2 (inactivity-gated): trust/loyalty/quality_exp/price_sens regress toward
+    baseline only for customers inactive > threshold days.
     """
     mem = config.get("memory", {})
-    decay_after = int(mem.get("brand_memory_decay_after_days", 90))
 
     if "days_since_last_interaction" not in customers_df.columns:
         return customers_df
-    if "trust_score" not in customers_df.columns:
-        return customers_df
 
     customers_df = customers_df.copy()
-    days_inactive = customers_df["days_since_last_interaction"].fillna(0).values
-    trust = customers_df["trust_score"].values.copy()
 
-    # For customers inactive > threshold, drift trust toward 0.5
+    # ── Phase 1: Universal memory decay (ALL customers) ──
+
+    # Satisfaction memory: good memories fade
+    if "satisfaction_memory" in customers_df.columns:
+        sat_decay = float(mem.get("satisfaction_memory_decay_rate", 0.003))
+        sat = customers_df["satisfaction_memory"].values
+        customers_df["satisfaction_memory"] = np.maximum(sat * (1.0 - sat_decay), 0.0)
+
+    # Disappointment memory: bad memories fade (slightly faster — negativity bias is in update phase)
+    if "disappointment_memory" in customers_df.columns:
+        dis_decay = float(mem.get("disappointment_memory_decay_rate", 0.004))
+        dis = customers_df["disappointment_memory"].values
+        customers_df["disappointment_memory"] = np.maximum(dis * (1.0 - dis_decay), 0.0)
+
+    # ── Phase 2: Inactivity-gated regression ──
+
+    decay_after = int(mem.get("brand_memory_decay_after_days", 90))
+    days_inactive = customers_df["days_since_last_interaction"].fillna(0).values
     inactive_mask = days_inactive > decay_after
+
     if not np.any(inactive_mask):
         return customers_df
 
-    # Drift rate: small daily pull toward 0.5
-    decay_rate = float(mem.get("brand_memory_decay_rate", 0.005))
-    trust[inactive_mask] += (0.5 - trust[inactive_mask]) * decay_rate
+    # Trust (existing) — toward 0.5
+    if "trust_score" in customers_df.columns:
+        decay_rate = float(mem.get("brand_memory_decay_rate", 0.005))
+        trust = customers_df["trust_score"].values.copy()
+        trust[inactive_mask] += (0.5 - trust[inactive_mask]) * decay_rate
+        customers_df["trust_score"] = np.clip(trust, 0.0, 1.0)
 
-    customers_df["trust_score"] = np.clip(trust, 0.0, 1.0)
+    # Loyalty — toward baseline
+    if "loyalty_propensity" in customers_df.columns:
+        loy_rate = float(mem.get("loyalty_regression_rate", 0.002))
+        loy_base = float(mem.get("loyalty_baseline", 0.5))
+        loyalty = customers_df["loyalty_propensity"].values.copy()
+        loyalty[inactive_mask] += (loy_base - loyalty[inactive_mask]) * loy_rate
+        customers_df["loyalty_propensity"] = np.clip(loyalty, 0.0, 1.0)
+
+    # Quality expectation — toward baseline
+    if "quality_expectation" in customers_df.columns:
+        qe_rate = float(mem.get("quality_expectation_regression_rate", 0.002))
+        qe_base = float(mem.get("quality_expectation_baseline", 0.5))
+        qe = customers_df["quality_expectation"].values.copy()
+        qe[inactive_mask] += (qe_base - qe[inactive_mask]) * qe_rate
+        customers_df["quality_expectation"] = np.clip(qe, 0.0, 1.0)
+
+    # Price sensitivity — toward baseline
+    if "price_sensitivity" in customers_df.columns:
+        ps_rate = float(mem.get("price_sensitivity_regression_rate", 0.002))
+        ps_base = float(mem.get("price_sensitivity_baseline", 0.5))
+        ps = customers_df["price_sensitivity"].values.copy()
+        ps[inactive_mask] += (ps_base - ps[inactive_mask]) * ps_rate
+        customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
+
     return customers_df

@@ -79,6 +79,18 @@ memory:
   brand_memory_decay_rate: 0.008
   bad_shipping_permanent_penalty: 0.25
   discount_only_fullprice_penalty: 0.4
+  satisfaction_memory_decay_rate: 0.003
+  disappointment_memory_decay_rate: 0.004
+  loyalty_regression_rate: 0.002
+  loyalty_baseline: 0.5
+  quality_expectation_regression_rate: 0.002
+  quality_expectation_baseline: 0.5
+  price_sensitivity_regression_rate: 0.002
+  price_sensitivity_baseline: 0.5
+
+quality_expectation_calibration_rate: 0.01
+fullprice_desensitization_rate: 0.005
+loyalty_disappointment_erosion: 0.02
 
 long_term_accumulators:
   ctr_erosion_per_churn: 0.03
