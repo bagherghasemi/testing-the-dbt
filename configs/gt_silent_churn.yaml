@@ -78,6 +78,7 @@ distribution_realism:
 memory:
   brand_memory_decay_after_days: 45
   brand_memory_decay_rate: 0.020
+  purchase_inactivity_decay_after_days: 30
   bad_shipping_permanent_penalty: 0.15
   discount_only_fullprice_penalty: 0.4
   satisfaction_memory_decay_rate: 0.003

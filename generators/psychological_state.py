@@ -640,12 +640,16 @@ def update_shipping_experience(
 def apply_brand_memory_decay(
     customers_df: pd.DataFrame,
     config: dict,
+    current_date=None,
 ) -> pd.DataFrame:
     """
-    Daily memory decay in two phases:
+    Daily memory decay in three phases:
     Phase 1 (universal): satisfaction/disappointment memories fade for ALL customers.
-    Phase 2 (inactivity-gated): trust/loyalty/quality_exp/price_sens regress toward
-    baseline only for customers inactive > threshold days.
+    Phase 2a (interaction-inactivity-gated): trust/loyalty regress toward baseline
+        only for customers with no interaction > threshold days.
+    Phase 2b (purchase-inactivity-gated): quality_exp/price_sens regress toward
+        baseline for customers who haven't PURCHASED > threshold days (even if
+        they still see ads). Uses last_order_date, not days_since_last_interaction.
     """
     mem = config.get("memory", {})
 
@@ -668,44 +672,60 @@ def apply_brand_memory_decay(
         dis = customers_df["disappointment_memory"].values
         customers_df["disappointment_memory"] = np.maximum(dis * (1.0 - dis_decay), 0.0)
 
-    # ── Phase 2: Inactivity-gated regression ──
+    # ── Phase 2a: Interaction-inactivity-gated regression (trust, loyalty) ──
 
     decay_after = int(mem.get("brand_memory_decay_after_days", 90))
     days_inactive = customers_df["days_since_last_interaction"].fillna(0).values
     inactive_mask = days_inactive > decay_after
 
-    if not np.any(inactive_mask):
-        return customers_df
+    if np.any(inactive_mask):
+        # Trust — toward 0.5
+        if "trust_score" in customers_df.columns:
+            decay_rate = float(mem.get("brand_memory_decay_rate", 0.005))
+            trust = customers_df["trust_score"].values.copy()
+            trust[inactive_mask] += (0.5 - trust[inactive_mask]) * decay_rate
+            customers_df["trust_score"] = np.clip(trust, 0.0, 1.0)
 
-    # Trust (existing) — toward 0.5
-    if "trust_score" in customers_df.columns:
-        decay_rate = float(mem.get("brand_memory_decay_rate", 0.005))
-        trust = customers_df["trust_score"].values.copy()
-        trust[inactive_mask] += (0.5 - trust[inactive_mask]) * decay_rate
-        customers_df["trust_score"] = np.clip(trust, 0.0, 1.0)
+        # Loyalty — toward baseline
+        if "loyalty_propensity" in customers_df.columns:
+            loy_rate = float(mem.get("loyalty_regression_rate", 0.002))
+            loy_base = float(mem.get("loyalty_baseline", 0.5))
+            loyalty = customers_df["loyalty_propensity"].values.copy()
+            loyalty[inactive_mask] += (loy_base - loyalty[inactive_mask]) * loy_rate
+            customers_df["loyalty_propensity"] = np.clip(loyalty, 0.0, 1.0)
 
-    # Loyalty — toward baseline
-    if "loyalty_propensity" in customers_df.columns:
-        loy_rate = float(mem.get("loyalty_regression_rate", 0.002))
-        loy_base = float(mem.get("loyalty_baseline", 0.5))
-        loyalty = customers_df["loyalty_propensity"].values.copy()
-        loyalty[inactive_mask] += (loy_base - loyalty[inactive_mask]) * loy_rate
-        customers_df["loyalty_propensity"] = np.clip(loyalty, 0.0, 1.0)
+    # ── Phase 2b: Purchase-inactivity regression (quality_exp, price_sens) ──
+    # Gate on days since last PURCHASE, not last interaction.
+    # This fires for customers who still see ads but have stopped buying.
+    if current_date is not None and "last_order_date" in customers_df.columns:
+        purchase_days = (
+            pd.Timestamp(current_date)
+            - pd.to_datetime(customers_df["last_order_date"])
+        ).dt.days.fillna(99999).values
+        purchase_decay_after = int(mem.get(
+            "purchase_inactivity_decay_after_days",
+            mem.get("brand_memory_decay_after_days", 90),
+        ))
+        purchase_inactive_mask = purchase_days > purchase_decay_after
+    else:
+        # Fallback: use interaction-based mask (old behavior)
+        purchase_inactive_mask = inactive_mask
 
-    # Quality expectation — toward baseline
-    if "quality_expectation" in customers_df.columns:
-        qe_rate = float(mem.get("quality_expectation_regression_rate", 0.002))
-        qe_base = float(mem.get("quality_expectation_baseline", 0.5))
-        qe = customers_df["quality_expectation"].values.copy()
-        qe[inactive_mask] += (qe_base - qe[inactive_mask]) * qe_rate
-        customers_df["quality_expectation"] = np.clip(qe, 0.0, 1.0)
+    if np.any(purchase_inactive_mask):
+        # Quality expectation — toward baseline
+        if "quality_expectation" in customers_df.columns:
+            qe_rate = float(mem.get("quality_expectation_regression_rate", 0.002))
+            qe_base = float(mem.get("quality_expectation_baseline", 0.5))
+            qe = customers_df["quality_expectation"].values.copy()
+            qe[purchase_inactive_mask] += (qe_base - qe[purchase_inactive_mask]) * qe_rate
+            customers_df["quality_expectation"] = np.clip(qe, 0.0, 1.0)
 
-    # Price sensitivity — toward baseline
-    if "price_sensitivity" in customers_df.columns:
-        ps_rate = float(mem.get("price_sensitivity_regression_rate", 0.002))
-        ps_base = float(mem.get("price_sensitivity_baseline", 0.5))
-        ps = customers_df["price_sensitivity"].values.copy()
-        ps[inactive_mask] += (ps_base - ps[inactive_mask]) * ps_rate
-        customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
+        # Price sensitivity — toward baseline
+        if "price_sensitivity" in customers_df.columns:
+            ps_rate = float(mem.get("price_sensitivity_regression_rate", 0.002))
+            ps_base = float(mem.get("price_sensitivity_baseline", 0.5))
+            ps = customers_df["price_sensitivity"].values.copy()
+            ps[purchase_inactive_mask] += (ps_base - ps[purchase_inactive_mask]) * ps_rate
+            customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
 
     return customers_df

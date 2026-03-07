@@ -742,6 +742,7 @@ def _write_god_mode_snapshot(
         "satisfaction_memory", "recent_negative_velocity",
         "discount_dependency", "expressed_desire_level", "exposure_count",
         "discount_only_buyer", "days_since_last_interaction",
+        "days_since_last_purchase",
         "price_sensitivity", "impulse_level", "loyalty_propensity",
         "regret_propensity", "quality_expectation", "spending_propensity",
     ]
@@ -749,6 +750,11 @@ def _write_god_mode_snapshot(
     converted = customers_df[customers_df["last_order_date"].notna()]
     if converted.empty:
         return
+    # Compute days_since_last_purchase from last_order_date (no NaT after filter)
+    converted = converted.copy()
+    converted["days_since_last_purchase"] = (
+        pd.Timestamp(snapshot_date) - pd.to_datetime(converted["last_order_date"])
+    ).dt.days.astype(int)
     available = [c for c in GOD_MODE_COLS if c in converted.columns]
     if len(available) < len(GOD_MODE_COLS):
         missing = set(GOD_MODE_COLS) - set(available)
@@ -1187,7 +1193,7 @@ def main() -> None:
         customers_df = update_shipping_experience(customers_df, fulfillments_df, orders_df, date_str)
 
         # Upgrade 6: brand memory decay for inactive customers
-        customers_df = apply_brand_memory_decay(customers_df, config)
+        customers_df = apply_brand_memory_decay(customers_df, config, current_date=current)
 
         # Upgrade 10: Apply trust floor from cumulative refund history
         if "trust_score" in customers_df.columns and brand_state._enabled:
