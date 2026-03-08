@@ -16,6 +16,11 @@ jobs:
           - gt_silent_churn
           - gt_extreme_good
           - gt_extreme_bad
+          - gt_seasonal_brand
+          - gt_reformed_discounter
+          - gt_quality_collapse
+          - gt_loyal_niche
+          - gt_moderate_middle
 
     steps:
       - name: Checkout repository
