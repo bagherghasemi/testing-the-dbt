@@ -266,6 +266,7 @@ def update_customers_from_day_orders(
     """
     alpha = float(config.get("trust_alpha", 0.1))
     beta = float(config.get("trust_beta", 0.1))
+    trust_neg_mult = float(config.get("trust_negative_alpha_multiplier", 3.0))
     velocity_decay = float(config.get("negative_velocity_decay", 0.85))
     velocity_cap = float(config.get("negative_velocity_cap", 2.0))
 
@@ -295,6 +296,7 @@ def update_customers_from_day_orders(
     if "quality_expectation" in customers_df.columns:
         quality_exp = customers_df["quality_expectation"].values.copy()
         qe_cal_rate = float(config.get("quality_expectation_calibration_rate", 0.01))
+        qe_pos_mult = float(config.get("quality_expectation_positive_multiplier", 0.33))
     else:
         quality_exp = None
 
@@ -380,7 +382,7 @@ def update_customers_from_day_orders(
                 if good_count >= 3:
                     effective_mismatch *= 0.7
             # Tier 9: angle trust stability — authority slows decay; fear sharpens it
-            effective_alpha = alpha / angle_trust_mod
+            effective_alpha = (alpha * trust_neg_mult) / angle_trust_mod
             disappointment[idx] += effective_mismatch
             trust[idx] -= effective_mismatch * effective_alpha
             recent_neg_vel[idx] = velocity_decay * recent_neg_vel[idx] + (1.0 - velocity_decay) * min(mismatch, 1.0)
@@ -393,6 +395,8 @@ def update_customers_from_day_orders(
             satisfaction[idx] += satisfaction_bonus
             trust[idx] += satisfaction_bonus * effective_beta
             recent_neg_vel[idx] = velocity_decay * recent_neg_vel[idx]
+            if quality_exp is not None:
+                quality_exp[idx] += abs(mismatch) * qe_cal_rate * qe_pos_mult
 
     trust = np.clip(trust, 0.0, 1.0)
     disappointment = np.maximum(disappointment, 0.0)
