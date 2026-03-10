@@ -733,3 +733,44 @@ def apply_brand_memory_decay(
             customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
 
     return customers_df
+
+
+def apply_coupling_modulations(customers_df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Daily coupling modulations between psychological state variables.
+
+    Trust → Price Sensitivity (inverse, Erdem & Swait 2004):
+        Trust creates perceived brand uniqueness → reduces price comparison relevance.
+    Loyalty → Price Sensitivity (inverse, Krishnamurthi & Raj 1991):
+        Loyal customers assign idiosyncratic value → resist price switching.
+    Desire → Quality Expectations (inflation, Brehm 1966 / Festinger 1957):
+        Desire inflates quality beliefs via confirmation bias.
+    """
+    coupling = config.get("coupling", {})
+    customers_df = customers_df.copy()
+
+    # --- Trust → Price Sensitivity (inverse) ---
+    if "trust_score" in customers_df.columns and "price_sensitivity" in customers_df.columns:
+        trust_ps_str = float(coupling.get("trust_price_sensitivity_strength", 0.005))
+        trust = customers_df["trust_score"].values
+        ps = customers_df["price_sensitivity"].values.copy()
+        # High trust (>0.5) pushes PS down; low trust (<0.5) pushes PS up
+        ps += trust_ps_str * (0.5 - trust)
+        customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
+
+    # --- Loyalty → Price Sensitivity (inverse) ---
+    if "loyalty_propensity" in customers_df.columns and "price_sensitivity" in customers_df.columns:
+        loy_ps_str = float(coupling.get("loyalty_price_sensitivity_strength", 0.003))
+        loyalty = customers_df["loyalty_propensity"].values
+        ps = customers_df["price_sensitivity"].values.copy()
+        ps += loy_ps_str * (0.5 - loyalty)
+        customers_df["price_sensitivity"] = np.clip(ps, 0.0, 1.0)
+
+    # --- Desire → Quality Expectations (inflation) ---
+    if "expressed_desire_level" in customers_df.columns and "quality_expectation" in customers_df.columns:
+        desire_qe_str = float(coupling.get("desire_quality_expectation_inflation", 0.0005))
+        desire = customers_df["expressed_desire_level"].fillna(0.1).values
+        qe = customers_df["quality_expectation"].values.copy()
+        qe += desire * desire_qe_str
+        customers_df["quality_expectation"] = np.clip(qe, 0.0, 1.0)
+
+    return customers_df

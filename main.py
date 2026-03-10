@@ -41,6 +41,7 @@ from generators.psychological_state import (
     apply_identity_drift,
     update_shipping_experience,
     apply_brand_memory_decay,
+    apply_coupling_modulations,
 )
 from generators.commerce import (
     generate_products,
@@ -504,6 +505,22 @@ def _update_desire_after_exposure(
     cid_str = customers_df["customer_id"].astype(str)
     lookup = per_customer.set_index("customer_id")["_delta"].to_dict()
     add = cid_str.map(lookup).fillna(0).values
+
+    # Fix 4: Trust → Desire modulation (Chaudhuri & Holbrook 2001)
+    # Trust reduces perceived risk → enables desire expression.
+    # Also serves as trust-mediated replacement for removed Disappointment→Desire collapse.
+    trust_mod = float(config.get("coupling", {}).get("trust_desire_modulation", 0.5))
+    if trust_mod > 0 and "trust_score" in customers_df.columns:
+        trust_vals = customers_df["trust_score"].fillna(0.5).values
+        add = add * (1.0 - trust_mod + trust_mod * trust_vals)  # range [(1-mod), 1.0]
+
+    # Fix 5: Satisfaction → Desire boost (Garbarino & Johnson 1999)
+    # Past satisfaction creates positive affect → sustains desire.
+    sat_boost = float(config.get("coupling", {}).get("satisfaction_desire_boost", 0.1))
+    if sat_boost > 0 and "satisfaction_memory" in customers_df.columns:
+        sat_vals = np.minimum(customers_df["satisfaction_memory"].fillna(0).values, 1.0)
+        add = add * (1.0 + sat_vals * sat_boost)
+
     customers_df["expressed_desire_level"] = (
         customers_df["expressed_desire_level"].fillna(0.1).values + add
     )
@@ -1182,8 +1199,8 @@ def main() -> None:
             creatives_df,
             config,
         )
-        # Optional: strong disappointment → desire collapse
-        customers_df = _apply_disappointment_desire_collapse(customers_df, config)
+        # REMOVED: Disappointment→Desire collapse (research: ⊥/none, Disappointment and Desire are independent).
+        # Replaced by trust-mediated path: Disappointment → Trust erosion (ps.py:387) → Trust → Desire (Fix 4).
         # Price psychology: discount dependency from today's orders + daily decay
         customers_df = _update_discount_dependency(customers_df, orders_df, config)
         # Expressed desire: daily decay
@@ -1194,6 +1211,9 @@ def main() -> None:
 
         # Upgrade 6: brand memory decay for inactive customers
         customers_df = apply_brand_memory_decay(customers_df, config, current_date=current)
+
+        # Coupling modulations: Trust→PS, Loyalty→PS, Desire→QE (daily cognitive drift)
+        customers_df = apply_coupling_modulations(customers_df, config)
 
         # Upgrade 10: Apply trust floor from cumulative refund history
         if "trust_score" in customers_df.columns and brand_state._enabled:
