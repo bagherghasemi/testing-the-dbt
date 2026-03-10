@@ -1,0 +1,116 @@
+# Ground truth: brand_collapse — accelerated quality collapse with extreme saturation/decline
+# Collapse: refund_mult 3.5/4.0, repeat_mult 0.1/0.05, cpa_mult 2.5, velocity 6
+# Split: TEST
+seed: 413
+
+simulation:
+  start_date: "2023-01-01"
+  end_date: "2026-01-01"
+
+num_customers: 450
+num_products: 20
+creatives: 28
+
+base_ctr: 0.030
+base_conversion: 0.045
+base_refund_rate: 0.12
+
+budget_tier: mid
+budget_concentration: 2.0
+budget_volatility: 0.25
+cpm: 15.0
+lpv_rate: 0.72
+
+brand_lifecycle:
+  enabled: true
+  market_size: 400000
+  initial_phase: launch
+  growth_velocity_threshold: 6
+  growth_repeat_stability_cv: 0.3
+  maturation_penetration_pct: 0.12
+  maturation_cpa_rise_pct: 0.40
+  saturation_cpa_ltv_ratio: 0.7
+  decline_repeat_decay_pct: 0.25
+  decline_cpa_multiplier: 1.8
+  phase_effects:
+    launch:     {ctr_mult: 1.05, cvr_mult: 1.1,  refund_mult: 0.3, repeat_mult: 1.3,  cpa_mult: 0.9}
+    growth:     {ctr_mult: 1.05, cvr_mult: 1.05, refund_mult: 0.4, repeat_mult: 1.2,  cpa_mult: 1.0}
+    maturation: {ctr_mult: 1.0,  cvr_mult: 0.95, refund_mult: 0.5, repeat_mult: 1.1,  cpa_mult: 1.1}
+    saturation: {ctr_mult: 0.70, cvr_mult: 0.55, refund_mult: 3.5, repeat_mult: 0.1,  cpa_mult: 2.5}
+    decline:    {ctr_mult: 0.50, cvr_mult: 0.35, refund_mult: 4.0, repeat_mult: 0.05, cpa_mult: 2.5}
+
+population_dynamics:
+  enabled: true
+  daily_inflow_base: 40
+  inflow_decay_rate: 0.0005
+  quality_drift_rate: 0.0006
+  quality_drift_cap: 0.30
+  pool_expiry_days: 300
+
+diagnostic_output: true
+
+lag_structure:
+  trust_ema_weight: 0.85
+  refund_timing_modes:
+    - [5, 2, 0.6]
+    - [18, 5, 0.4]
+
+momentum:
+  enabled: true
+  revenue_autocorrelation: 0.7
+  ctr_autocorrelation: 0.5
+  conversion_autocorrelation: 0.6
+  seasonality:
+    weekly_pattern: [0.85, 0.95, 1.0, 1.0, 1.05, 1.1, 1.05]
+    monthly_pattern: [0.9, 0.85, 0.95, 1.0, 1.0, 0.95, 0.9, 0.9, 1.05, 1.1, 1.15, 1.3]
+
+feedback_loops:
+  enabled: true
+  pressure_ramp_rate: 0.02
+  pressure_decay_rate: 0.01
+  pressure_quality_penalty: 0.10
+  revenue_target_window_days: 28
+
+distribution_realism:
+  enabled: true
+  spending_propensity_sigma: 0.5
+  creative_quality_sigma: 0.4
+
+memory:
+  brand_memory_decay_after_days: 120
+  brand_memory_decay_rate: 0.003
+  bad_shipping_permanent_penalty: 0.20
+  discount_only_fullprice_penalty: 0.45
+  satisfaction_memory_decay_rate: 0.003
+  disappointment_memory_decay_rate: 0.004
+  loyalty_regression_rate: 0.002
+  loyalty_baseline: 0.5
+  quality_expectation_regression_rate: 0.002
+  quality_expectation_baseline: 0.5
+  price_sensitivity_regression_rate: 0.002
+  price_sensitivity_baseline: 0.5
+
+quality_expectation_calibration_rate: 0.01
+fullprice_desensitization_rate: 0.005
+loyalty_disappointment_erosion: 0.02
+
+long_term_accumulators:
+  ctr_erosion_per_churn: 0.025
+  discount_dependency_cvr_penalty: 0.35
+  trust_floor_from_refunds: 0.48
+  exhaustion_cpa_multiplier: 1.7
+
+creative_lifecycle:
+  enabled: true
+  novelty_bonus_duration_impressions: 5000
+  ramp_end_impressions: 10000
+  plateau_duration_impressions: 45000
+  fatigue_half_life_impressions: 90000
+  min_performance_floor: 0.2
+
+creative_type_multipliers:
+  image:      {ctr_multiplier: 1.0, cvr_multiplier: 1.0, fatigue_multiplier: 0.10}
+  video:      {ctr_multiplier: 1.2, cvr_multiplier: 1.1, fatigue_multiplier: 0.20}
+  carousel:   {ctr_multiplier: 1.1, cvr_multiplier: 1.05, fatigue_multiplier: 0.15}
+  ugc:        {ctr_multiplier: 1.4, cvr_multiplier: 1.3, fatigue_multiplier: 0.40}
+  collection: {ctr_multiplier: 1.0, cvr_multiplier: 1.0, fatigue_multiplier: 0.08}

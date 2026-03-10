@@ -10,6 +10,7 @@ jobs:
     strategy:
       matrix:
         scenario:
+          # === Existing 11 ===
           - gt_healthy_growth
           - gt_discount_addiction
           - gt_bad_acquisition
@@ -21,6 +22,52 @@ jobs:
           - gt_quality_collapse
           - gt_loyal_niche
           - gt_moderate_middle
+          # === Batch 1: Category Archetypes ===
+          - gt_beauty_replenishment
+          - gt_fast_fashion_returns
+          - gt_supplement_habit
+          - gt_furniture_onedone
+          - gt_pet_loyalty
+          - gt_electronics_gift
+          - gt_baby_lifecycle
+          # === Batch 2: Growth Trajectories ===
+          - gt_fitness_newyear
+          - gt_viral_launch
+          - gt_steady_compounder
+          - gt_maturity_plateau
+          - gt_slow_erosion
+          - gt_brand_collapse
+          - gt_strategic_turnaround
+          # === Batch 3: Pricing Strategy ===
+          - gt_ultra_premium
+          - gt_strategic_promoter
+          - gt_deep_discount_trap
+          - gt_premium_to_discount
+          # === Batch 4: Crisis & Recovery ===
+          - gt_post_viral_hangover
+          - gt_supply_chain_shock
+          - gt_offseason_crash
+          - gt_post_boycott
+          # === Batch 5: Customer Composition ===
+          - gt_bimodal_customers
+          - gt_whale_dependent
+          - gt_aging_cohort
+          - gt_founder_community
+          - gt_habit_formation
+          # === Batch 6: Edge Cases ===
+          - gt_subscription_churn
+          - gt_bracketing_fashion
+          - gt_guilt_regret
+          - gt_bfcm_onetimer
+          - gt_gifting_category
+          - gt_trading_down
+          - gt_wellness_obsessive
+          # === Batch 7: Gap Scenarios ===
+          - gt_bnpl_impulse
+          - gt_tiktok_primary
+          - gt_hypochondriac_supp
+          - gt_gen_cohort_diverge
+          - gt_economic_stress
 
     steps:
       - name: Checkout repository
