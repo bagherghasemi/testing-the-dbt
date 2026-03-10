@@ -1,0 +1,104 @@
+name: Sweep Parallel Runs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    strategy:
+      matrix:
+        scenario:
+          - gt_sweep_001
+          - gt_sweep_002
+          - gt_sweep_003
+          - gt_sweep_004
+          - gt_sweep_005
+          - gt_sweep_006
+          - gt_sweep_007
+          - gt_sweep_008
+          - gt_sweep_009
+          - gt_sweep_010
+          - gt_sweep_011
+          - gt_sweep_012
+          - gt_sweep_013
+          - gt_sweep_014
+          - gt_sweep_015
+          - gt_sweep_016
+          - gt_sweep_017
+          - gt_sweep_018
+          - gt_sweep_019
+          - gt_sweep_020
+          - gt_sweep_021
+          - gt_sweep_022
+          - gt_sweep_023
+          - gt_sweep_024
+          - gt_sweep_025
+          - gt_sweep_026
+          - gt_sweep_027
+          - gt_sweep_028
+          - gt_sweep_029
+          - gt_sweep_030
+          - gt_sweep_031
+          - gt_sweep_032
+          - gt_sweep_033
+          - gt_sweep_034
+          - gt_sweep_035
+          - gt_sweep_036
+          - gt_sweep_037
+          - gt_sweep_038
+          - gt_sweep_039
+          - gt_sweep_040
+          - gt_sweep_041
+          - gt_sweep_042
+          - gt_sweep_043
+          - gt_sweep_044
+          - gt_sweep_045
+          - gt_sweep_046
+          - gt_sweep_047
+          - gt_sweep_048
+          - gt_sweep_049
+          - gt_sweep_050
+          - gt_sweep_051
+          - gt_sweep_052
+          - gt_sweep_053
+          - gt_sweep_054
+          - gt_sweep_055
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run simulator (${{ matrix.scenario }})
+        run: |
+          echo "Running scenario: ${{ matrix.scenario }}"
+          python main.py configs/${{ matrix.scenario }}.yaml
+          echo ""
+          echo "=== Output files ==="
+          find output/ -name "*.parquet" | head -20
+          echo "..."
+          find output/ -name "*.parquet" | wc -l
+          echo "total parquet files"
+
+      - name: Package output
+        run: |
+          cd output
+          tar czf ../output_${{ matrix.scenario }}.tar.gz .
+          cd ..
+          ls -lh output_${{ matrix.scenario }}.tar.gz
+
+      - name: Upload Parquet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.scenario }}_output
+          path: output_${{ matrix.scenario }}.tar.gz
+          retention-days: 7

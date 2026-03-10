@@ -246,3 +246,28 @@ All 7 config files created with valid YAML, all 15 required sections, correct ba
 
 ## Final Determination: PASS (pre-push)
 Full validation will complete on CI run.
+
+---
+
+# Verification Log: Generate 55 Parameter Sweep Scenarios
+
+## Task
+Generate 55 parameter-sweep configs (48 LHS + 7 adversarial) for empirical calibration.
+
+## Verification Checklist
+
+| # | Check | Result | Evidence |
+|---|-------|--------|----------|
+| 1 | `ls configs/gt_sweep_*.yaml \| wc -l` → 55 | PASS | 55 files confirmed |
+| 2 | Each file loads via `yaml.safe_load` without error | PASS | Script validation pass |
+| 3 | All template keys present in every sweep config | PASS | Checked all top-level keys |
+| 4 | All primary param values within declared bounds | PASS | No out-of-range errors |
+| 5 | Seeds 501–555, no collisions | PASS | 55 unique seeds verified |
+| 6 | Min normalized distance to existing > 0.10 | PASS | 0 dedup rejections |
+| 7 | Train/test split: 39/16 | PASS | Confirmed |
+| 8 | Test set ≥3 phase profiles | PASS | 6 unique profiles |
+| 9 | 3 smoke tests pass | PASS | sweep_001, 025, 053 |
+| 10 | sweep_parallel.yml has 55 scenarios | PASS | Confirmed |
+
+## Iterations: 2 (1 bug fix for custom profile KeyError)
+## Final Determination: PASS
